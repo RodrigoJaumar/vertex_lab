@@ -1,0 +1,3 @@
+{"instance": [5.0, 3.6, 1.4, 0.2], "prediction": 0.0}
+{"instance": [4.9, 3.0, 1.4, 0.2], "prediction": 0.0}
+{"instance": [5.1, 3.5, 1.4, 0.2], "prediction": 0.0}
