@@ -1,0 +1,95 @@
+# PIPELINE DEFINITION
+# Name: preprocess-houseprice-data
+# Inputs:
+#    train_df: system.Dataset
+# Outputs:
+#    dataset_train_preprocessed: system.Dataset
+components:
+  comp-preprocess-houseprice-data:
+    executorLabel: exec-preprocess-houseprice-data
+    inputDefinitions:
+      artifacts:
+        train_df:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        dataset_train_preprocessed:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-preprocess-houseprice-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - preprocess_houseprice_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef preprocess_houseprice_data(\n    train_df: Input[Dataset],\n\
+          \    dataset_train_preprocessed: Output[Dataset],\n):\n\n    import pandas\
+          \ as pd\n    from src.data_preprocessing.preprocessing import data_preprocessing_pipeline\n\
+          \    print(\"es el data preprocesing\")\n    train_df = pd.read_csv(train_df.path)\n\
+          \n    # data_preprocessing_pipeline creates a copy of the df, removes id\
+          \ col, converts to correct dtype, \\\n    # subtracts YearSold from temporal\
+          \ features and cosine transforms cyclic features.\n    train_df_preprocessed\
+          \ = data_preprocessing_pipeline(train_df)\n\n    train_df_preprocessed.to_csv(dataset_train_preprocessed.path,\
+          \ index=False)\n\n"
+        image: europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training
+pipelineInfo:
+  name: preprocess-houseprice-data
+root:
+  dag:
+    outputs:
+      artifacts:
+        dataset_train_preprocessed:
+          artifactSelectors:
+          - outputArtifactKey: dataset_train_preprocessed
+            producerSubtask: preprocess-houseprice-data
+    tasks:
+      preprocess-houseprice-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-preprocess-houseprice-data
+        inputs:
+          artifacts:
+            train_df:
+              componentInputArtifact: train_df
+        taskInfo:
+          name: preprocess-houseprice-data
+  inputDefinitions:
+    artifacts:
+      train_df:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+  outputDefinitions:
+    artifacts:
+      dataset_train_preprocessed:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.5.0

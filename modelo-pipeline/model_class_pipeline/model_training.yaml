@@ -1,0 +1,154 @@
+# PIPELINE DEFINITION
+# Name: train-houseprice
+# Inputs:
+#    dataset_test: system.Dataset
+#    dataset_train: system.Dataset
+# Outputs:
+#    best_params: system.Markdown
+#    model: system.Model
+#    shap_summary_plot: system.HTML
+components:
+  comp-train-houseprice:
+    executorLabel: exec-train-houseprice
+    inputDefinitions:
+      artifacts:
+        dataset_test:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+        dataset_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        best_params:
+          artifactType:
+            schemaTitle: system.Markdown
+            schemaVersion: 0.0.1
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        shap_summary_plot:
+          artifactType:
+            schemaTitle: system.HTML
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-train-houseprice:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - train_houseprice
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef train_houseprice(\n    dataset_train: Input[Dataset],\n    dataset_test:\
+          \ Input[Dataset],\n    best_params: Output[Markdown],\n    shap_summary_plot:\
+          \ Output[HTML],\n    model: Output[Model], \n):\n\n    import pandas as\
+          \ pd\n    import pickle\n    import shap\n    from src.modelling.train import\
+          \ HousePriceModel\n    from src.utils.utils import get_image_data\n\n  \
+          \  TARGET = 'SalePrice'\n    print(\"es el train\")\n    # Read train and\
+          \ test data\n    train_data = pd.read_csv(dataset_train.path)\n    test_data\
+          \ = pd.read_csv(dataset_test.path)\n\n    # Instantiate the model class\n\
+          \    house_price_model = HousePriceModel(test_data.copy(),   #we perform\
+          \ hyperparameter tuning using train_data and evaluate using test_data and\
+          \ finally train the final model using the entire (train+test) dataset.\n\
+          \                                        target=TARGET,\n              \
+          \                          n_kfold_splits=3,\n                         \
+          \               n_trials=10, \n                                        random_state=42)\n\
+          \n    # Create X_train and y_train\n    X_train = train_data.drop(TARGET,\
+          \ axis=1)\n    y_train = train_data[TARGET]\n\n    # Fit the model (training\
+          \ pipeline consists of feature engineering, feature selection and training\
+          \ an xgboost model)\n    house_price_model.fit(X_train, y_train)\n\n   \
+          \ # Save the best hyperparameters as an artifact\n    with open(best_params.path,\
+          \ \"w\") as f:\n        f.write(str(house_price_model.best_params))\n\n\
+          \    shap.summary_plot(house_price_model.shap_values, house_price_model.X_test_transformed,\
+          \ max_display=20) # plot shap summary plot\n    shap_plot_dataurl = get_image_data()\
+          \ # get image data to render the image in the html file\n    html_content\
+          \ = f'<html><head></head><body><h1>Shap Summary Plot</h1>\\n<img src={shap_plot_dataurl}\
+          \ width=\"97%\"></body></html>' \n    # Save shap summary plot as an html\
+          \ artifact\n    with open(shap_summary_plot.path, \"w\") as f: \n      \
+          \  f.write(html_content)\n\n    model.metadata[\"framework\"] = \"xgboost\"\
+          \ \n    # Save the model as an artifact\n    with open(model.path, 'wb')\
+          \ as f: \n        pickle.dump({\n            \"pipeline\": house_price_model.model_pipeline,\n\
+          \            \"target\": house_price_model.target,\n            \"scores_dict\"\
+          : house_price_model.scores}, f)\n\n"
+        image: europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training
+pipelineInfo:
+  name: train-houseprice
+root:
+  dag:
+    outputs:
+      artifacts:
+        best_params:
+          artifactSelectors:
+          - outputArtifactKey: best_params
+            producerSubtask: train-houseprice
+        model:
+          artifactSelectors:
+          - outputArtifactKey: model
+            producerSubtask: train-houseprice
+        shap_summary_plot:
+          artifactSelectors:
+          - outputArtifactKey: shap_summary_plot
+            producerSubtask: train-houseprice
+    tasks:
+      train-houseprice:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-houseprice
+        inputs:
+          artifacts:
+            dataset_test:
+              componentInputArtifact: dataset_test
+            dataset_train:
+              componentInputArtifact: dataset_train
+        taskInfo:
+          name: train-houseprice
+  inputDefinitions:
+    artifacts:
+      dataset_test:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+      dataset_train:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+  outputDefinitions:
+    artifacts:
+      best_params:
+        artifactType:
+          schemaTitle: system.Markdown
+          schemaVersion: 0.0.1
+      model:
+        artifactType:
+          schemaTitle: system.Model
+          schemaVersion: 0.0.1
+      shap_summary_plot:
+        artifactType:
+          schemaTitle: system.HTML
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.5.0

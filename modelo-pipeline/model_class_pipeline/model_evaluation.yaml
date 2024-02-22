@@ -1,0 +1,150 @@
+# PIPELINE DEFINITION
+# Name: evaluate-houseprice
+# Inputs:
+#    houseprice_model: system.Model
+# Outputs:
+#    evaluate-houseprice-metrics_baseline: system.Metrics
+#    evaluate-houseprice-metrics_test: system.Metrics
+#    evaluate-houseprice-metrics_train: system.Metrics
+#    metrics_baseline: system.Metrics
+#    metrics_test: system.Metrics
+#    metrics_train: system.Metrics
+components:
+  comp-evaluate-houseprice:
+    executorLabel: exec-evaluate-houseprice
+    inputDefinitions:
+      artifacts:
+        houseprice_model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+    outputDefinitions:
+      artifacts:
+        metrics_baseline:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+        metrics_test:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+        metrics_train:
+          artifactType:
+            schemaTitle: system.Metrics
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-evaluate-houseprice:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - evaluate_houseprice
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef evaluate_houseprice(\n    houseprice_model: Input[Model],\n \
+          \   metrics_baseline: Output[Metrics],\n    metrics_train: Output[Metrics],\n\
+          \    metrics_test: Output[Metrics]):\n\n    import pickle\n    print(\"\
+          es la evaluacion del modelo\")\n    file_name = houseprice_model.path\n\
+          \    with open(file_name, 'rb') as file:  \n        model_data = pickle.load(file)\n\
+          \n    scores = model_data[\"scores_dict\"] \n\n    def log_metrics(scores,\
+          \ metric):\n        for metric_name, val in scores.items():\n          \
+          \  metric.log_metric(metric_name, float(val))\n\n    log_metrics(scores[\"\
+          baseline_scores\"], metrics_baseline)        \n    log_metrics(scores[\"\
+          train_scores\"], metrics_train)\n    log_metrics(scores[\"test_scores\"\
+          ], metrics_test)\n\n"
+        image: europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training
+pipelineInfo:
+  name: evaluate-houseprice
+root:
+  dag:
+    outputs:
+      artifacts:
+        evaluate-houseprice-metrics_baseline:
+          artifactSelectors:
+          - outputArtifactKey: metrics_baseline
+            producerSubtask: evaluate-houseprice
+        evaluate-houseprice-metrics_test:
+          artifactSelectors:
+          - outputArtifactKey: metrics_test
+            producerSubtask: evaluate-houseprice
+        evaluate-houseprice-metrics_train:
+          artifactSelectors:
+          - outputArtifactKey: metrics_train
+            producerSubtask: evaluate-houseprice
+        metrics_baseline:
+          artifactSelectors:
+          - outputArtifactKey: metrics_baseline
+            producerSubtask: evaluate-houseprice
+        metrics_test:
+          artifactSelectors:
+          - outputArtifactKey: metrics_test
+            producerSubtask: evaluate-houseprice
+        metrics_train:
+          artifactSelectors:
+          - outputArtifactKey: metrics_train
+            producerSubtask: evaluate-houseprice
+    tasks:
+      evaluate-houseprice:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-evaluate-houseprice
+        inputs:
+          artifacts:
+            houseprice_model:
+              componentInputArtifact: houseprice_model
+        taskInfo:
+          name: evaluate-houseprice
+  inputDefinitions:
+    artifacts:
+      houseprice_model:
+        artifactType:
+          schemaTitle: system.Model
+          schemaVersion: 0.0.1
+  outputDefinitions:
+    artifacts:
+      evaluate-houseprice-metrics_baseline:
+        artifactType:
+          schemaTitle: system.Metrics
+          schemaVersion: 0.0.1
+      evaluate-houseprice-metrics_test:
+        artifactType:
+          schemaTitle: system.Metrics
+          schemaVersion: 0.0.1
+      evaluate-houseprice-metrics_train:
+        artifactType:
+          schemaTitle: system.Metrics
+          schemaVersion: 0.0.1
+      metrics_baseline:
+        artifactType:
+          schemaTitle: system.Metrics
+          schemaVersion: 0.0.1
+      metrics_test:
+        artifactType:
+          schemaTitle: system.Metrics
+          schemaVersion: 0.0.1
+      metrics_train:
+        artifactType:
+          schemaTitle: system.Metrics
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.5.0

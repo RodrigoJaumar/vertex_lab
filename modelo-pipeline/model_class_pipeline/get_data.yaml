@@ -1,0 +1,86 @@
+# PIPELINE DEFINITION
+# Name: get-houseprice-data
+# Inputs:
+#    filepath: str
+# Outputs:
+#    dataset_train: system.Dataset
+components:
+  comp-get-houseprice-data:
+    executorLabel: exec-get-houseprice-data
+    inputDefinitions:
+      parameters:
+        filepath:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        dataset_train:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-get-houseprice-data:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - get_houseprice_data
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0'\
+          \ '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"\
+          $0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef get_houseprice_data(\n    filepath: str,\n    dataset_train:\
+          \ Output[Dataset],\n):\n\n    import pandas as pd\n\n    df_train = pd.read_csv(filepath\
+          \ + '/train.csv')\n\n    df_train.head(50).to_csv(dataset_train.path, index=False)\n\
+          \n"
+        image: europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training
+pipelineInfo:
+  name: get-houseprice-data
+root:
+  dag:
+    outputs:
+      artifacts:
+        dataset_train:
+          artifactSelectors:
+          - outputArtifactKey: dataset_train
+            producerSubtask: get-houseprice-data
+    tasks:
+      get-houseprice-data:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-get-houseprice-data
+        inputs:
+          parameters:
+            filepath:
+              componentInputParameter: filepath
+        taskInfo:
+          name: get-houseprice-data
+  inputDefinitions:
+    parameters:
+      filepath:
+        parameterType: STRING
+  outputDefinitions:
+    artifacts:
+      dataset_train:
+        artifactType:
+          schemaTitle: system.Dataset
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.5.0

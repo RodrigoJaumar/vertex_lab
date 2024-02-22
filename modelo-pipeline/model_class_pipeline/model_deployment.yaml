@@ -1,0 +1,168 @@
+# PIPELINE DEFINITION
+# Name: deploy-houseprice
+# Inputs:
+#    display_name: str
+#    gcp_project: str
+#    gcp_region: str
+#    model: system.Model
+#    model_endpoint: str
+#    serving_container_image_uri: str
+# Outputs:
+#    vertex_endpoint: system.Model
+#    vertex_model: system.Model
+components:
+  comp-deploy-houseprice:
+    executorLabel: exec-deploy-houseprice
+    inputDefinitions:
+      artifacts:
+        model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+      parameters:
+        display_name:
+          parameterType: STRING
+        gcp_project:
+          parameterType: STRING
+        gcp_region:
+          parameterType: STRING
+        model_endpoint:
+          parameterType: STRING
+        serving_container_image_uri:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        vertex_endpoint:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+        vertex_model:
+          artifactType:
+            schemaTitle: system.Model
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-deploy-houseprice:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - deploy_houseprice
+        command:
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef deploy_houseprice(\n        serving_container_image_uri: str,\n\
+          \        display_name: str,\n        model_endpoint: str,\n        gcp_project:\
+          \ str,\n        gcp_region: str,\n        model: Input[Model],\n       \
+          \ vertex_model: Output[Model],\n        vertex_endpoint: Output[Model]\n\
+          ):\n    from google.cloud import aiplatform as vertex_ai\n    from pathlib\
+          \ import Path\n    print(\"es deploy\")\n    # Checks existing Vertex AI\
+          \ Enpoint or creates Endpoint if it is not exist.\n    def create_endpoint\
+          \ ():\n        endpoints = vertex_ai.Endpoint.list(\n        filter='display_name=\"\
+          {}\"'.format(model_endpoint),\n        order_by='create_time desc',\n  \
+          \      project=gcp_project,\n        location=gcp_region,\n        )\n \
+          \       if len(endpoints) > 0:\n            endpoint = endpoints[0] # most\
+          \ recently created\n        else:\n            endpoint = vertex_ai.Endpoint.create(\n\
+          \                display_name=model_endpoint,\n                project=gcp_project,\n\
+          \                location=gcp_region\n        )\n        return endpoint\n\
+          \n    endpoint = create_endpoint()\n\n    # Uploads trained model to Vertex\
+          \ AI Model Registry or creates new model version into existing uploaded\
+          \ one.\n    def upload_model ():\n        listed_model = vertex_ai.Model.list(\n\
+          \        filter='display_name=\"{}\"'.format(display_name),\n        project=gcp_project,\n\
+          \        location=gcp_region,\n        )\n        if len(listed_model) >\
+          \ 0:\n            model_version = listed_model[0] # most recently created\n\
+          \            model_upload = vertex_ai.Model.upload(\n                  \
+          \  display_name=display_name,\n                    parent_model=model_version.resource_name,\n\
+          \                    artifact_uri=str(Path(model.path).parent),\n      \
+          \              serving_container_image_uri=serving_container_image_uri,\n\
+          \                    location=gcp_region,\n                    serving_container_predict_route=\"\
+          /predict\",\n                    serving_container_health_route=\"/health\"\
+          \n            )\n        else:\n            model_upload = vertex_ai.Model.upload(\n\
+          \                    display_name=display_name,\n                    artifact_uri=str(Path(model.path).parent),\n\
+          \                    serving_container_image_uri=serving_container_image_uri,\n\
+          \                    location=gcp_region,\n                    serving_container_predict_route=\"\
+          /predict\",\n                    serving_container_health_route=\"/health\"\
+          \n            )\n        return model_upload\n\n    uploaded_model = upload_model()\n\
+          \n    # Save data to the output params\n    vertex_model.uri = uploaded_model.resource_name\n\
+          \n    # Deploys trained model to Vertex AI Endpoint\n    model_deploy =\
+          \ uploaded_model.deploy(\n        machine_type='n1-standard-2',\n      \
+          \  endpoint=endpoint,\n        traffic_split={\"0\": 100},\n        deployed_model_display_name=display_name,\n\
+          \    )\n\n    # Save data to the output params\n    vertex_endpoint.uri\
+          \ = model_deploy.resource_name\n\n"
+        image: europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training
+pipelineInfo:
+  name: deploy-houseprice
+root:
+  dag:
+    outputs:
+      artifacts:
+        vertex_endpoint:
+          artifactSelectors:
+          - outputArtifactKey: vertex_endpoint
+            producerSubtask: deploy-houseprice
+        vertex_model:
+          artifactSelectors:
+          - outputArtifactKey: vertex_model
+            producerSubtask: deploy-houseprice
+    tasks:
+      deploy-houseprice:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-deploy-houseprice
+        inputs:
+          artifacts:
+            model:
+              componentInputArtifact: model
+          parameters:
+            display_name:
+              componentInputParameter: display_name
+            gcp_project:
+              componentInputParameter: gcp_project
+            gcp_region:
+              componentInputParameter: gcp_region
+            model_endpoint:
+              componentInputParameter: model_endpoint
+            serving_container_image_uri:
+              componentInputParameter: serving_container_image_uri
+        taskInfo:
+          name: deploy-houseprice
+  inputDefinitions:
+    artifacts:
+      model:
+        artifactType:
+          schemaTitle: system.Model
+          schemaVersion: 0.0.1
+    parameters:
+      display_name:
+        parameterType: STRING
+      gcp_project:
+        parameterType: STRING
+      gcp_region:
+        parameterType: STRING
+      model_endpoint:
+        parameterType: STRING
+      serving_container_image_uri:
+        parameterType: STRING
+  outputDefinitions:
+    artifacts:
+      vertex_endpoint:
+        artifactType:
+          schemaTitle: system.Model
+          schemaVersion: 0.0.1
+      vertex_model:
+        artifactType:
+          schemaTitle: system.Model
+          schemaVersion: 0.0.1
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.5.0

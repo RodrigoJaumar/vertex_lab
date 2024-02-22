@@ -1,0 +1,582 @@
+{
+  "components": {
+    "comp-deploy-houseprice": {
+      "executorLabel": "exec-deploy-houseprice",
+      "inputDefinitions": {
+        "artifacts": {
+          "model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "display_name": {
+            "parameterType": "STRING"
+          },
+          "gcp_project": {
+            "parameterType": "STRING"
+          },
+          "gcp_region": {
+            "parameterType": "STRING"
+          },
+          "model_endpoint": {
+            "parameterType": "STRING"
+          },
+          "serving_container_image_uri": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "vertex_endpoint": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "vertex_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-evaluate-houseprice": {
+      "executorLabel": "exec-evaluate-houseprice",
+      "inputDefinitions": {
+        "artifacts": {
+          "houseprice_model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "metrics_baseline": {
+            "artifactType": {
+              "schemaTitle": "system.Metrics",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "metrics_test": {
+            "artifactType": {
+              "schemaTitle": "system.Metrics",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "metrics_train": {
+            "artifactType": {
+              "schemaTitle": "system.Metrics",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-get-houseprice-data": {
+      "executorLabel": "exec-get-houseprice-data",
+      "inputDefinitions": {
+        "parameters": {
+          "filepath": {
+            "parameterType": "STRING"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "dataset_train": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-preprocess-houseprice-data": {
+      "executorLabel": "exec-preprocess-houseprice-data",
+      "inputDefinitions": {
+        "artifacts": {
+          "train_df": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "dataset_train_preprocessed": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-train-houseprice": {
+      "executorLabel": "exec-train-houseprice",
+      "inputDefinitions": {
+        "artifacts": {
+          "dataset_test": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "dataset_train": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "best_params": {
+            "artifactType": {
+              "schemaTitle": "system.Markdown",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "model": {
+            "artifactType": {
+              "schemaTitle": "system.Model",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "shap_summary_plot": {
+            "artifactType": {
+              "schemaTitle": "system.HTML",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    },
+    "comp-train-test-split": {
+      "executorLabel": "exec-train-test-split",
+      "inputDefinitions": {
+        "artifacts": {
+          "dataset_in": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        },
+        "parameters": {
+          "test_size": {
+            "defaultValue": 0.2,
+            "isOptional": true,
+            "parameterType": "NUMBER_DOUBLE"
+          }
+        }
+      },
+      "outputDefinitions": {
+        "artifacts": {
+          "dataset_test": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          },
+          "dataset_train": {
+            "artifactType": {
+              "schemaTitle": "system.Dataset",
+              "schemaVersion": "0.0.1"
+            }
+          }
+        }
+      }
+    }
+  },
+  "defaultPipelineRoot": "gs://careful-acumen-414922-houseprice/pipeline_root_houseprice/",
+  "deploymentSpec": {
+    "executors": {
+      "exec-deploy-houseprice": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "deploy_houseprice"
+          ],
+          "command": [
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef deploy_houseprice(\n        serving_container_image_uri: str,\n        display_name: str,\n        model_endpoint: str,\n        gcp_project: str,\n        gcp_region: str,\n        model: Input[Model],\n        vertex_model: Output[Model],\n        vertex_endpoint: Output[Model]\n):\n    from google.cloud import aiplatform as vertex_ai\n    from pathlib import Path\n    print(\"es deploy\")\n    # Checks existing Vertex AI Enpoint or creates Endpoint if it is not exist.\n    def create_endpoint ():\n        endpoints = vertex_ai.Endpoint.list(\n        filter='display_name=\"{}\"'.format(model_endpoint),\n        order_by='create_time desc',\n        project=gcp_project,\n        location=gcp_region,\n        )\n        if len(endpoints) > 0:\n            endpoint = endpoints[0] # most recently created\n        else:\n            endpoint = vertex_ai.Endpoint.create(\n                display_name=model_endpoint,\n                project=gcp_project,\n                location=gcp_region\n        )\n        return endpoint\n\n    endpoint = create_endpoint()\n\n    # Uploads trained model to Vertex AI Model Registry or creates new model version into existing uploaded one.\n    def upload_model ():\n        listed_model = vertex_ai.Model.list(\n        filter='display_name=\"{}\"'.format(display_name),\n        project=gcp_project,\n        location=gcp_region,\n        )\n        if len(listed_model) > 0:\n            model_version = listed_model[0] # most recently created\n            model_upload = vertex_ai.Model.upload(\n                    display_name=display_name,\n                    parent_model=model_version.resource_name,\n                    artifact_uri=str(Path(model.path).parent),\n                    serving_container_image_uri=serving_container_image_uri,\n                    location=gcp_region,\n                    serving_container_predict_route=\"/predict\",\n                    serving_container_health_route=\"/health\"\n            )\n        else:\n            model_upload = vertex_ai.Model.upload(\n                    display_name=display_name,\n                    artifact_uri=str(Path(model.path).parent),\n                    serving_container_image_uri=serving_container_image_uri,\n                    location=gcp_region,\n                    serving_container_predict_route=\"/predict\",\n                    serving_container_health_route=\"/health\"\n            )\n        return model_upload\n\n    uploaded_model = upload_model()\n\n    # Save data to the output params\n    vertex_model.uri = uploaded_model.resource_name\n\n    # Deploys trained model to Vertex AI Endpoint\n    model_deploy = uploaded_model.deploy(\n        machine_type='n1-standard-2',\n        endpoint=endpoint,\n        traffic_split={\"0\": 100},\n        deployed_model_display_name=display_name,\n    )\n\n    # Save data to the output params\n    vertex_endpoint.uri = model_deploy.resource_name\n\n"
+          ],
+          "image": "europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training"
+        }
+      },
+      "exec-evaluate-houseprice": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "evaluate_houseprice"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef evaluate_houseprice(\n    houseprice_model: Input[Model],\n    metrics_baseline: Output[Metrics],\n    metrics_train: Output[Metrics],\n    metrics_test: Output[Metrics]):\n\n    import pickle\n    print(\"es la evaluacion del modelo\")\n    file_name = houseprice_model.path\n    with open(file_name, 'rb') as file:  \n        model_data = pickle.load(file)\n\n    scores = model_data[\"scores_dict\"] \n\n    def log_metrics(scores, metric):\n        for metric_name, val in scores.items():\n            metric.log_metric(metric_name, float(val))\n\n    log_metrics(scores[\"baseline_scores\"], metrics_baseline)        \n    log_metrics(scores[\"train_scores\"], metrics_train)\n    log_metrics(scores[\"test_scores\"], metrics_test)\n\n"
+          ],
+          "image": "europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training"
+        }
+      },
+      "exec-get-houseprice-data": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "get_houseprice_data"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef get_houseprice_data(\n    filepath: str,\n    dataset_train: Output[Dataset],\n):\n\n    import pandas as pd\n\n    df_train = pd.read_csv(filepath + '/train.csv')\n\n    df_train.head(50).to_csv(dataset_train.path, index=False)\n\n"
+          ],
+          "image": "europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training"
+        }
+      },
+      "exec-preprocess-houseprice-data": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "preprocess_houseprice_data"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef preprocess_houseprice_data(\n    train_df: Input[Dataset],\n    dataset_train_preprocessed: Output[Dataset],\n):\n\n    import pandas as pd\n    from src.data_preprocessing.preprocessing import data_preprocessing_pipeline\n    print(\"es el data preprocesing\")\n    train_df = pd.read_csv(train_df.path)\n\n    # data_preprocessing_pipeline creates a copy of the df, removes id col, converts to correct dtype, \\\n    # subtracts YearSold from temporal features and cosine transforms cyclic features.\n    train_df_preprocessed = data_preprocessing_pipeline(train_df)\n\n    train_df_preprocessed.to_csv(dataset_train_preprocessed.path, index=False)\n\n"
+          ],
+          "image": "europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training"
+        }
+      },
+      "exec-train-houseprice": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "train_houseprice"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef train_houseprice(\n    dataset_train: Input[Dataset],\n    dataset_test: Input[Dataset],\n    best_params: Output[Markdown],\n    shap_summary_plot: Output[HTML],\n    model: Output[Model], \n):\n\n    import pandas as pd\n    import pickle\n    import shap\n    from src.modelling.train import HousePriceModel\n    from src.utils.utils import get_image_data\n\n    TARGET = 'SalePrice'\n    print(\"es el train\")\n    # Read train and test data\n    train_data = pd.read_csv(dataset_train.path)\n    test_data = pd.read_csv(dataset_test.path)\n\n    # Instantiate the model class\n    house_price_model = HousePriceModel(test_data.copy(),   #we perform hyperparameter tuning using train_data and evaluate using test_data and finally train the final model using the entire (train+test) dataset.\n                                        target=TARGET,\n                                        n_kfold_splits=3,\n                                        n_trials=10, \n                                        random_state=42)\n\n    # Create X_train and y_train\n    X_train = train_data.drop(TARGET, axis=1)\n    y_train = train_data[TARGET]\n\n    # Fit the model (training pipeline consists of feature engineering, feature selection and training an xgboost model)\n    house_price_model.fit(X_train, y_train)\n\n    # Save the best hyperparameters as an artifact\n    with open(best_params.path, \"w\") as f:\n        f.write(str(house_price_model.best_params))\n\n    shap.summary_plot(house_price_model.shap_values, house_price_model.X_test_transformed, max_display=20) # plot shap summary plot\n    shap_plot_dataurl = get_image_data() # get image data to render the image in the html file\n    html_content = f'<html><head></head><body><h1>Shap Summary Plot</h1>\\n<img src={shap_plot_dataurl} width=\"97%\"></body></html>' \n    # Save shap summary plot as an html artifact\n    with open(shap_summary_plot.path, \"w\") as f: \n        f.write(html_content)\n\n    model.metadata[\"framework\"] = \"xgboost\" \n    # Save the model as an artifact\n    with open(model.path, 'wb') as f: \n        pickle.dump({\n            \"pipeline\": house_price_model.model_pipeline,\n            \"target\": house_price_model.target,\n            \"scores_dict\": house_price_model.scores}, f)\n\n"
+          ],
+          "image": "europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training"
+        }
+      },
+      "exec-train-test-split": {
+        "container": {
+          "args": [
+            "--executor_input",
+            "{{$}}",
+            "--function_to_execute",
+            "train_test_split"
+          ],
+          "command": [
+            "sh",
+            "-c",
+            "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip || python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1 python3 -m pip install --quiet --no-warn-script-location 'kfp==2.5.0' '--no-deps' 'typing-extensions>=3.7.4,<5; python_version<\"3.9\"' && \"$0\" \"$@\"\n",
+            "sh",
+            "-ec",
+            "program_path=$(mktemp -d)\n\nprintf \"%s\" \"$0\" > \"$program_path/ephemeral_component.py\"\n_KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         \"$program_path/ephemeral_component.py\"                         \"$@\"\n",
+            "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import *\n\ndef train_test_split(dataset_in: Input[Dataset],\n                     dataset_train: Output[Dataset],\n                     dataset_test: Output[Dataset],\n                     test_size: float = 0.2):\n\n    import pandas as pd\n    from sklearn.model_selection import train_test_split\n    print(\"es el train split\")\n    df = pd.read_csv(dataset_in.path)\n    df_train, df_test = train_test_split(df, test_size=test_size, random_state=42)\n\n    df_train.to_csv(dataset_train.path, index=False)\n    df_test.to_csv(dataset_test.path, index=False)\n\n"
+          ],
+          "image": "europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/training"
+        }
+      }
+    }
+  },
+  "pipelineInfo": {
+    "name": "pipeline-houseprice"
+  },
+  "root": {
+    "dag": {
+      "outputs": {
+        "artifacts": {
+          "evaluate-houseprice-metrics_baseline": {
+            "artifactSelectors": [
+              {
+                "outputArtifactKey": "metrics_baseline",
+                "producerSubtask": "evaluate-houseprice"
+              }
+            ]
+          },
+          "evaluate-houseprice-metrics_test": {
+            "artifactSelectors": [
+              {
+                "outputArtifactKey": "metrics_test",
+                "producerSubtask": "evaluate-houseprice"
+              }
+            ]
+          },
+          "evaluate-houseprice-metrics_train": {
+            "artifactSelectors": [
+              {
+                "outputArtifactKey": "metrics_train",
+                "producerSubtask": "evaluate-houseprice"
+              }
+            ]
+          }
+        }
+      },
+      "tasks": {
+        "deploy-houseprice": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-deploy-houseprice"
+          },
+          "dependentTasks": [
+            "train-houseprice"
+          ],
+          "inputs": {
+            "artifacts": {
+              "model": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "model",
+                  "producerTask": "train-houseprice"
+                }
+              }
+            },
+            "parameters": {
+              "display_name": {
+                "runtimeValue": {
+                  "constant": "houseprice"
+                }
+              },
+              "gcp_project": {
+                "componentInputParameter": "project"
+              },
+              "gcp_region": {
+                "componentInputParameter": "region"
+              },
+              "model_endpoint": {
+                "runtimeValue": {
+                  "constant": "houseprice_endpoint"
+                }
+              },
+              "serving_container_image_uri": {
+                "componentInputParameter": "serving_container_image_uri"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "deploy-houseprice"
+          }
+        },
+        "evaluate-houseprice": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-evaluate-houseprice"
+          },
+          "dependentTasks": [
+            "train-houseprice"
+          ],
+          "inputs": {
+            "artifacts": {
+              "houseprice_model": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "model",
+                  "producerTask": "train-houseprice"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "evaluate-houseprice"
+          }
+        },
+        "get-houseprice-data": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-get-houseprice-data"
+          },
+          "inputs": {
+            "parameters": {
+              "filepath": {
+                "componentInputParameter": "data_filepath"
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "get-houseprice-data"
+          }
+        },
+        "preprocess-houseprice-data": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-preprocess-houseprice-data"
+          },
+          "dependentTasks": [
+            "get-houseprice-data"
+          ],
+          "inputs": {
+            "artifacts": {
+              "train_df": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "dataset_train",
+                  "producerTask": "get-houseprice-data"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "preprocess-houseprice-data"
+          }
+        },
+        "train-houseprice": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-train-houseprice"
+          },
+          "dependentTasks": [
+            "train-test-split"
+          ],
+          "inputs": {
+            "artifacts": {
+              "dataset_test": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "dataset_test",
+                  "producerTask": "train-test-split"
+                }
+              },
+              "dataset_train": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "dataset_train",
+                  "producerTask": "train-test-split"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "train-houseprice"
+          }
+        },
+        "train-test-split": {
+          "cachingOptions": {
+            "enableCache": true
+          },
+          "componentRef": {
+            "name": "comp-train-test-split"
+          },
+          "dependentTasks": [
+            "preprocess-houseprice-data"
+          ],
+          "inputs": {
+            "artifacts": {
+              "dataset_in": {
+                "taskOutputArtifact": {
+                  "outputArtifactKey": "dataset_train_preprocessed",
+                  "producerTask": "preprocess-houseprice-data"
+                }
+              }
+            }
+          },
+          "taskInfo": {
+            "name": "train-test-split"
+          }
+        }
+      }
+    },
+    "inputDefinitions": {
+      "parameters": {
+        "data_filepath": {
+          "defaultValue": "gs://careful-acumen-414922-houseprice/data",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "display_name": {
+          "defaultValue": "pipeline-houseprice-job20240222122154",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "project": {
+          "defaultValue": "careful-acumen-414922",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "region": {
+          "defaultValue": "europe-west2",
+          "isOptional": true,
+          "parameterType": "STRING"
+        },
+        "serving_container_image_uri": {
+          "defaultValue": "europe-west2-docker.pkg.dev/careful-acumen-414922/houseprice/serving_image:latest",
+          "isOptional": true,
+          "parameterType": "STRING"
+        }
+      }
+    },
+    "outputDefinitions": {
+      "artifacts": {
+        "evaluate-houseprice-metrics_baseline": {
+          "artifactType": {
+            "schemaTitle": "system.Metrics",
+            "schemaVersion": "0.0.1"
+          }
+        },
+        "evaluate-houseprice-metrics_test": {
+          "artifactType": {
+            "schemaTitle": "system.Metrics",
+            "schemaVersion": "0.0.1"
+          }
+        },
+        "evaluate-houseprice-metrics_train": {
+          "artifactType": {
+            "schemaTitle": "system.Metrics",
+            "schemaVersion": "0.0.1"
+          }
+        }
+      }
+    }
+  },
+  "schemaVersion": "2.1.0",
+  "sdkVersion": "kfp-2.5.0"
+}
